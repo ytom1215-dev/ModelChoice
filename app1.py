@@ -3,7 +3,7 @@ import pandas as pd
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import scipy.stats as stats
-import io  # ← サンプルデータ読み込み用に追加
+import io  
 
 st.set_page_config(page_title="データ解析トレーニング", layout="wide")
 st.title("🌱 農業データ解析トレーニング（GLM ＆ ノンパラ編）")
@@ -110,7 +110,7 @@ with tab2:
                     st.code(str(e))
 
 # ==========================================
-# STEP 2 & 3: 解析設定（以降は変更なし）
+# STEP 2 & 3: 解析設定
 # ==========================================
 if st.session_state.df is not None:
     df = st.session_state.df.copy()
@@ -276,18 +276,44 @@ if st.session_state.df is not None:
                     * **`P>|z|` (p値)**: その変数がカウント数に「有意な影響を与えているか」を示します。**p < 0.05** であれば統計的に意味のある要因です。
                     """)
 
+                # 修正部分：正規分布（OLS）の評価ロジック
                 else:
+                    # ① 割合データ（母数あり）に正規分布を選んだ場合（不正解トラップ）
                     if col_total != "なし":
                         formula_ols = f"I({col_event}/{col_total}) ~ {exp_formula}"
+                        model = smf.ols(formula=formula_ols, data=df).fit()
+                        
+                        st.error("❌ 【不正解】変数の割り当ては合っていますが、モデル（分布）の選択が不適切です。")
+                        st.markdown("#### 🤔 なぜこのモデルはダメなのか？（査読で指摘されるポイント）")
+                        st.warning("割合データに対して「通常の線形回帰（正規分布）」を無理やり当てはめると、直線で予測を立ててしまうため「予測値が0%未満になる」「100%を超える」といった理論的破綻が起きます。また等分散性の前提も崩れるため、二項分布（GLM）を選択してください。")
+                        st.write(model.summary())
+                        
+                    # ② カウントデータ（値が小さい整数）に正規分布を選んだ場合（不正解トラップ）
+                    elif (df[col_event] % 1 == 0).all() and (df[col_event] >= 0).all() and df[col_event].max() < 100:
+                        formula_ols = f"{col_event} ~ {exp_formula}"
+                        model = smf.ols(formula=formula_ols, data=df).fit()
+                        
+                        st.error("❌ 【不正解】変数の割り当ては合っていますが、モデル（分布）の選択が不適切です。")
+                        st.markdown("#### 🤔 なぜこのモデルはダメなのか？（査読で指摘されるポイント）")
+                        st.warning("カウントデータ（特に平均が小さいもの）に「通常の線形回帰（正規分布）」を当てはめると、予測値がマイナスになる理論的破綻が起きます。また、カウントデータは平均が大きくなるほど分散も大きくなる性質があるため、ポアソン分布（GLM）を選択してください。")
+                        st.write(model.summary())
+                        
+                    # ③ 連続データ（収量など）に正規分布を選んだ場合（正解！）
                     else:
                         formula_ols = f"{col_event} ~ {exp_formula}"
-                    
-                    model = smf.ols(formula=formula_ols, data=df).fit()
-                    
-                    st.error("❌ 【不正解】変数の割り当ては合っていますが、モデル（分布）の選択が不適切です。")
-                    st.markdown("#### 🤔 なぜこのモデルはダメなのか？（査読で指摘されるポイント）")
-                    st.warning("割合データやカウントデータに「通常の線形回帰（正規分布）」を無理やり当てはめると、直線で予測を立ててしまうため「予測値がマイナスになる」「100%を超える」といった理論的破綻が起きます。また、正規分布の前提である「等分散性（データのばらつきがどこでも一定）」が崩れるため、出力されたp値の信頼性が失われ、誤った結論を導く危険があります。")
-                    st.write(model.summary())
+                        model = smf.ols(formula=formula_ols, data=df).fit()
+                        
+                        st.success("🎉 【正解】連続データに対して「通常の線形回帰（正規分布）」を適切に選択できました！")
+                        st.markdown("#### 📖 なぜこの選択が正しいのか？")
+                        st.info("収量や重量、長さなどの「連続変数」は、正規分布を仮定するモデル（通常の線形回帰や分散分析など）で解析するのが基本であり、最も適したアプローチです。")
+                        st.write(model.summary())
+                        st.markdown("#### 🔍 解析結果（サマリー表）の読み方")
+                        st.markdown("""
+                        農業論文を書く上で、表の真ん中にある **`coef`** と **`P>|t|`** の列が最も重要です。
+                        * **`coef` (偏回帰係数)**: その変数が目的変数（収量など）に与える「影響の向きと大きさ」です。
+                        * **`P>|t|` (p値)**: その変数の影響が「誤差（偶然）ではない」と言える確率の指標です。一般的に **p < 0.05** であれば「有意な影響がある」とみなします。
+                        * **`[0.025  0.975]` (95%信頼区間)**: 真の係数が95%の確率で収まる範囲です。この範囲が「0」を跨いでいなければ、有意差ありと同義です。
+                        """)
 
         except Exception as e:
             st.error("解析中に予期せぬエラーが発生しました。データの構造を確認してください。")
