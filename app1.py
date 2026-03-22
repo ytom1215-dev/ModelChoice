@@ -150,7 +150,27 @@ if st.session_state.df is not None:
         # 教育のための関所（入力値バリデーション）
         # ==========================================
         error_found = False
+# --- 👇ここから追加👇 ---
+        # 予約語チェック（yield等のプログラミング用語対策）
+        python_keywords = ["yield", "return", "def", "class", "pass", "break", "continue", "if", "else", "elif"]
+        used_cols = [col_total, col_event, col_exp1, col_exp2]
+        
+        for col in used_cols:
+            if str(col).lower() in python_keywords:
+                st.error(f"🚨 【変数名のエラー】列名に「 `{col}` 」という単語が使われています。")
+                st.markdown(f"""
+                **💡 なぜ解析できないの？（Python特有の罠）**
+                農業データでは「**yield**（収量）」という単語を列名に使いがちですが、Pythonプログラムにおいて `yield` や `return` などは、システムを動かすための**特別な命令語（予約語）**としてあらかじめ登録されています。
+                そのため、統計モデルの計算式にこの単語が混ざると、システムが「列名」なのか「プログラムの命令」なのか区別できず、エラーを起こしてしまいます。
 
+                **✅ 解決策**
+                CSVファイルの列名を `yield_kg`、`crop_yield`、あるいは日本語で `収量` のように変更して、もう一度アップロードし直してください。
+                """)
+                error_found = True
+        
+        if error_found:
+            st.stop()
+        # --- 👆ここまで追加👆 ---
         if col_total != "なし" and col_total == col_event:
             st.error("🚨 【考え直してみましょう】母数と目的変数に同じ列が選ばれています。")
             error_found = True
