@@ -5,6 +5,7 @@ import statsmodels.formula.api as smf
 import scipy.stats as stats
 import io
 import keyword  
+import re
 
 st.set_page_config(page_title="データ解析トレーニング", layout="wide")
 st.title("🌱 農業データ解析トレーニング（GLM ＆ ノンパラ編）")
@@ -179,7 +180,7 @@ csv_nonparam4 = """肥料,反復,根張りスコア
 有機肥料,4,2"""
 
 # ==========================================
-# 答えが推測できないように、名前からヒントを消して順序もバラバラに配置
+# 答えが推測できないように名前からヒントを消してシャッフル
 # ==========================================
 sample_choices = {
     "🍅 トマトの収量データ": csv_normal1,
@@ -196,7 +197,6 @@ sample_choices = {
     "🦟 害虫の死亡データ": csv_binomial3,
     "🌱 根張りスコアデータ": csv_nonparam4,
 }
-
 
 # ==========================================
 # STEP 1: データ読み込み
@@ -217,7 +217,7 @@ with tab2:
     if file:
         col1, col2 = st.columns([2, 1])
         with col1:
-            encoding = st.selectbox("文字コード（日本のExcelで作成した場合はcp932を推奨）", ["utf-8", "cp932"])
+            encoding = st.selectbox("文字コード（日本のExcelで作成した場合はcp932を推奨）",["utf-8", "cp932"])
         with col2:
             st.markdown("<br><br>", unsafe_allow_html=True)
             if st.button("読み込み実行", key="load_btn"):
@@ -344,19 +344,32 @@ if st.session_state.df is not None:
             st.markdown("---")
             st.header("📊 解析結果とフィードバック")
 
-            def Q(col_name):
-                return f"Q('{col_name}')"
+            # ▼エラー対策：数式エラーを回避するため、記号を「_」に変換した安全な列名とDFを内部で作成
+            def make_safe(name):
+                if name == "なし": return "なし"
+                safe = re.sub(r'[^\w]', '_', str(name)) # \wに含まれない記号（カッコやスペース等）を除外
+                if re.match(r'^[0-9]', safe): safe = '_' + safe # 数字から始まる場合は修正
+                return safe
             
-            if col_exp2 == "なし":
-                exp_formula = Q(col_exp1)
+            df_safe = df.copy()
+            df_safe.columns =[make_safe(c) for c in df.columns]
+
+            s_col_event = make_safe(col_event)
+            s_col_total = make_safe(col_total)
+            s_col_exp1  = make_safe(col_exp1)
+            s_col_exp2  = make_safe(col_exp2)
+
+            if s_col_exp2 == "なし":
+                exp_formula = s_col_exp1
             else:
                 if interaction == "なし":
-                    exp_formula = f"{Q(col_exp1)} + {Q(col_exp2)}"
+                    exp_formula = f"{s_col_exp1} + {s_col_exp2}"
                 else:
-                    exp_formula = f"{Q(col_exp1)} * {Q(col_exp2)}"
+                    exp_formula = f"{s_col_exp1} * {s_col_exp2}"
 
             # --- 解析分岐 ---
             if "ノンパラメトリック" in dist:
+                # ノンパラはPatsyを使わないので元のdfを使用
                 groups = [group[col_event].dropna() for name, group in df.groupby(col_exp1)]
                 stat, p_val = stats.kruskal(*groups)
                 
@@ -373,9 +386,9 @@ if st.session_state.df is not None:
                     st.warning("👉 **結論**: p値が0.05以上のため、グループ間に「有意な差があるとは言えない」と判断されます。")
 
             elif "二項分布" in dist:
-                df['proportion'] = df[col_event] / df[col_total]
+                df_safe['proportion'] = df_safe[s_col_event] / df_safe[s_col_total]
                 formula = f"proportion ~ {exp_formula}"
-                model = smf.glm(formula=formula, data=df, family=sm.families.Binomial(), var_weights=df[col_total]).fit()
+                model = smf.glm(formula=formula, data=df_safe, family=sm.families.Binomial(), var_weights=df_safe[s_col_total]).fit()
                 
                 st.success("🎉 【正解】「上限のある割合データ」に対して二項分布（GLM）を適切に選択できました。")
                 st.markdown("#### 📖 なぜこの選択が正しいのか？")
@@ -385,8 +398,8 @@ if st.session_state.df is not None:
                 st.markdown("* **`coef` (偏回帰係数)**: プラスなら事象の発生を増やし、マイナスなら減らす働きがあります。\n* **`P>|z|` (p値)**: 0.05未満であれば「有意な影響がある（意味のある差である）」とみなします。")
 
             elif "ポアソン分布" in dist:
-                formula = f"{Q(col_event)} ~ {exp_formula}"
-                model = smf.glm(formula=formula, data=df, family=sm.families.Poisson()).fit()
+                formula = f"{s_col_event} ~ {exp_formula}"
+                model = smf.glm(formula=formula, data=df_safe, family=sm.families.Poisson()).fit()
                 
                 st.success("🎉 【正解】「上限のないカウントデータ」に対してポアソン分布（GLM）を適切に選択できました。")
                 st.markdown("#### 📖 なぜこの選択が正しいのか？")
@@ -398,25 +411,25 @@ if st.session_state.df is not None:
             else:
                 # OLS（正規分布）のトラップと正解判定
                 if col_total != "なし":
-                    df['proportion'] = df[col_event] / df[col_total]
+                    df_safe['proportion'] = df_safe[s_col_event] / df_safe[s_col_total]
                     formula_ols = f"proportion ~ {exp_formula}"
-                    model = smf.ols(formula=formula_ols, data=df).fit()
+                    model = smf.ols(formula=formula_ols, data=df_safe).fit()
                     
                     st.error("❌ 【不正解】変数の割り当ては合っていますが、モデル（分布）の選択が不適切です。")
                     st.warning("割合データに通常の線形回帰を当てはめると、予測値が0%未満になったり100%を超えたりする理論的破綻が起きます。二項分布（GLM）を選択してください。")
                     st.write(model.summary())
                     
                 elif (df[col_event].dropna() % 1 == 0).all() and (df[col_event].dropna() >= 0).all() and df[col_event].max() < 100:
-                    formula_ols = f"{Q(col_event)} ~ {exp_formula}"
-                    model = smf.ols(formula=formula_ols, data=df).fit()
+                    formula_ols = f"{s_col_event} ~ {exp_formula}"
+                    model = smf.ols(formula=formula_ols, data=df_safe).fit()
                     
                     st.error("❌ 【不正解】変数の割り当ては合っていますが、モデル（分布）の選択が不適切です。")
                     st.warning("カウントデータ（特に平均が小さいもの）に線形回帰を当てはめると、予測値がマイナスになる理論的破綻が起きます。ポアソン分布（GLM）を選択してください。")
                     st.write(model.summary())
                     
                 else:
-                    formula_ols = f"{Q(col_event)} ~ {exp_formula}"
-                    model = smf.ols(formula=formula_ols, data=df).fit()
+                    formula_ols = f"{s_col_event} ~ {exp_formula}"
+                    model = smf.ols(formula=formula_ols, data=df_safe).fit()
                     
                     st.success("🎉 【正解】連続データに対して「通常の線形回帰（正規分布）」を適切に選択できました！")
                     st.info("収量や重量などの「連続変数」は、正規分布を仮定するモデル（通常の線形回帰や分散分析など）で解析するのが基本です。")
