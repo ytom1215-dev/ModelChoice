@@ -19,7 +19,6 @@ if "df" not in st.session_state:
 # ==========================================
 # 埋め込みサンプルデータ群
 # ==========================================
-# 🟢 【二項分布用】 上限のある割合・確率データ
 csv_binomial1 = """品種,調査個体数,腐敗数,積算温度
 とうや,141,5,1242.9
 とうや,120,8,1350.5
@@ -53,7 +52,6 @@ csv_binomial3 = """薬剤,濃度,総虫数,死亡数
 農薬B,200,51,18
 農薬B,500,49,35"""
 
-# 🔵 【ポアソン分布用】 上限のないカウントデータ
 csv_poisson1 = """トラップ種類,温度,捕獲数
 フェロモンA,15,2
 フェロモンA,20,5
@@ -88,7 +86,6 @@ csv_poisson3 = """品種,葉位,アブラムシ数
 品種C,中部,15
 品種C,下部,30"""
 
-# 🟡 【正規分布 (OLS) 用】 連続値データ
 csv_normal1 = """品種,肥料,収量
 A,標準,4.5
 A,標準,4.8
@@ -125,7 +122,6 @@ csv_normal3 = """品種,土壌水分,重量
 安納芋,30,210.5
 安納芋,40,240.9"""
 
-# 🟣 【ノンパラメトリック用】 順序データや歪んだデータ
 csv_nonparam1 = """品種,処理区,発病指数
 とうや,無処理,3
 とうや,無処理,4
@@ -182,21 +178,23 @@ csv_nonparam4 = """肥料,反復,根張りスコア
 有機肥料,3,2
 有機肥料,4,2"""
 
-# 辞書にまとめる（UI表示名 : CSVデータ）
+# ==========================================
+# 答えが推測できないように、名前からヒントを消して順序もバラバラに配置
+# ==========================================
 sample_choices = {
-    "【正規分布 1】🍅 トマトの収量データ（連続値）": csv_normal1,
-    "【正規分布 2】🥬 小松菜の草丈データ（連続値）": csv_normal2,
-    "【正規分布 3】🍠 サツマイモの重量データ（連続値）": csv_normal3,
-    "【二項分布 1】🥔 ジャガイモの腐敗率データ（割合）": csv_binomial1,
-    "【二項分布 2】🌱 種子の発芽率データ（割合）": csv_binomial2,
-    "【二項分布 3】🦟 害虫の死亡率データ（割合）": csv_binomial3,
-    "【ポアソン 1】🐛 害虫捕獲データ（上限なしカウント）": csv_poisson1,
-    "【ポアソン 2】🌿 雑草の発生本数データ（上限なしカウント）": csv_poisson2,
-    "【ポアソン 3】🐞 アブラムシの寄生数データ（上限なしカウント）": csv_poisson3,
-    "【ノンパラ 1】🦠 発病指数データ（順序データ）": csv_nonparam1,
-    "【ノンパラ 2】🍓 イチゴの食味スコアデータ（順序データ）": csv_nonparam2,
-    "【ノンパラ 3】🍎 果実の褐変度データ（順序データ）": csv_nonparam3,
-    "【ノンパラ 4】🌱 根張りスコアデータ（順序データ）": csv_nonparam4,
+    "🍅 トマトの収量データ": csv_normal1,
+    "🐛 害虫捕獲データ": csv_poisson1,
+    "🥔 ジャガイモの腐敗データ": csv_binomial1,
+    "🍓 イチゴの食味スコアデータ": csv_nonparam2,
+    "🌿 雑草の発生本数データ": csv_poisson2,
+    "🥬 小松菜の草丈データ": csv_normal2,
+    "🌱 種子の発芽データ": csv_binomial2,
+    "🦠 発病指数データ": csv_nonparam1,
+    "🍠 サツマイモの重量データ": csv_normal3,
+    "🍎 果実の褐変度データ": csv_nonparam3,
+    "🐞 アブラムシの寄生数データ": csv_poisson3,
+    "🦟 害虫の死亡データ": csv_binomial3,
+    "🌱 根張りスコアデータ": csv_nonparam4,
 }
 
 
@@ -207,12 +205,10 @@ st.header("Step1：データの読み込み")
 tab1, tab2 = st.tabs(["📝 アプリ内蔵のサンプルデータを使う", "📁 手持ちのCSVをアップロードする"])
 
 with tab1:
-    st.write("研修用に用意された様々なパターンのデータセットを読み込んで試すことができます。")
-    # 辞書のキーを選択肢にする
+    st.write("トレーニング用のデータセットを選択してください。（プレビューを見て適切な手法を推測しましょう！）")
     sample_choice_key = st.selectbox("使用するサンプルデータを選択してください", list(sample_choices.keys()))
     
     if st.button("サンプルデータを読み込む", type="primary"):
-        # 選ばれたキーに対応するCSV文字列をデータフレーム化
         st.session_state.df = pd.read_csv(io.StringIO(sample_choices[sample_choice_key]))
         st.success(f"✅ 「{sample_choice_key}」を読み込みました！下にスクロールしてStep2に進んでください。")
 
@@ -241,13 +237,14 @@ if st.session_state.df is not None:
 
     st.markdown("---")
     st.header("Step2：変数の役割定義")
+    st.write("💡 **データプレビューを確認し、このデータが持つ性質（連続値か、整数か、割合の元になるデータか等）を見極めてください。**")
     st.dataframe(df.head())
 
     cols = df.columns.tolist()
 
     c1, c2 = st.columns(2)
     with c1:
-        col_total = st.selectbox("母数（総調査個体数 n など） ※上限がない、または指数データの場合は「なし」", ["なし"] + cols)
+        col_total = st.selectbox("母数（総調査個体数 n など） ※上限がない、または指数データの場合は「なし」",["なし"] + cols)
         col_event = st.selectbox("目的変数（発芽数、虫の数、発病指数 など）", cols, index=min(1, len(cols)-1))
     with c2:
         col_exp1 = st.selectbox("説明変数1（品種、処理区 など）", cols, index=min(2, len(cols)-1))
@@ -273,19 +270,13 @@ if st.session_state.df is not None:
         # ==========================================
         error_found = False
 
-        # ① 予約語チェック（Python標準ライブラリを利用）
         used_cols =[col_total, col_event, col_exp1, col_exp2]
         for col in used_cols:
             if col != "なし" and keyword.iskeyword(str(col).lower()):
                 st.error(f"🚨 【変数名のエラー】列名に「 `{col}` 」という単語が使われています。")
-                st.markdown(f"""
-                **💡 なぜ解析できないの？（Python特有の罠）**
-                農業データでは「**yield**（収量）」などを列名にしがちですが、Pythonにおいて `yield` や `return` はシステムを動かすための**特別な命令語（予約語）**です。システムが「列名」なのか「プログラムの命令」なのか区別できずエラーを起こします。
-                **✅ 解決策**：CSVの列名を `yield_kg` や日本語の `収量` 等に変更してアップロードし直してください。
-                """)
+                st.markdown(f"**💡 なぜ解析できないの？（Python特有の罠）**\n農業データでは「**yield**（収量）」などを列名にしがちですが、Pythonにおいて `yield` や `return` は特別な命令語（予約語）です。システムが区別できずエラーを起こします。\n**✅ 解決策**：CSVの列名を `yield_kg` や日本語の `収量` 等に変更してください。")
                 error_found = True
         
-        # ② 変数の割り当てチェック
         if col_total != "なし" and col_total == col_event:
             st.error("🚨 【考え直してみましょう】母数と目的変数に同じ列が選ばれています。")
             error_found = True
@@ -302,7 +293,6 @@ if st.session_state.df is not None:
             st.warning("⚠️ 説明変数2が「なし」のため、交互作用なしとして計算を続行します。")
             interaction = "なし"
 
-        # ③ データ型のチェック
         if not pd.api.types.is_numeric_dtype(df[col_event]):
             st.error("🚨 【考え直してみましょう】目的変数が「文字データ」です。解析対象は数値である必要があります。")
             error_found = True
@@ -314,7 +304,6 @@ if st.session_state.df is not None:
         if error_found:
             st.stop()
 
-        # ④ 手法ごとの前提条件チェック
         if "二項分布" in dist:
             if col_total == "なし":
                 st.error("🚨 【考え直してみましょう】二項分布には「母数（分母）」が必要です。")
